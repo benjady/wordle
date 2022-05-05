@@ -1,7 +1,8 @@
 #Load words list
-words = read.csv("C:/Users/scotta/Downloads/twl06.txt",header = F)
+words = read.csv("C:/Users/scotta/My Drive/R/wordle/sowpods.txt",header = F, na.strings = "")
 View(words)
 str(words)
+head(words)
 
 #Calculate length of each word
 lenwords = as.data.frame(lapply(words,nchar))
@@ -9,24 +10,24 @@ lenwords = as.data.frame(lapply(words,nchar))
 #Create list of words of length 5
 words5 = words[lenwords == 5]
 
+#Convert words to numbers (faster processing?)
+word2num = function(w){
+  return(match(w[[1]],LETTERS))
+}
+words5num = lapply(lapply(words5,strsplit,''),word2num)
+
 #function to compare two words and return result
 comp = function(guess,answr){
-  guess = match(strsplit(guess,'')[[1]],letters) #Turn word into vector of numbers
-  answr = match(strsplit(answr,'')[[1]],letters)
-  p = sum(guess == answr) #Number of perfect matches
-  if(p == 0){
+  result = 2*(guess == answr) #Perfect matches marked as 2
+  if(sum(result) == 0){
     return(0)
   }
-  result = c(0,0,0,0,0) #Vector of score values
-  for(i in 1:5){ #Iterate through letters in guess
+  for(i in (1:5)[!result]){ #Iterate through non-perfect matches in guess
     if(!(guess[i] %in% answr)){ #If the letter is not in the answer, go to the next letter
-      next
-    } else if(guess[i] == answr[i]){ #Check for perfect match
-      result[i] = 2
       next
     } else {
       result[i] = 1
-      if(length(unique(guess)) == 5){ #Check for repeated letters in guess
+      if(!(guess[i] %in% guess[-i])){ #Check for repeated letter in guess
         next
       } else if(sum(result[guess[i] == guess] == 1) > sum(guess[i] == answr) - sum(answr[guess == answr] == guess[i])){
         #If the repeated letter is not needed, then mark as 0
@@ -34,7 +35,7 @@ comp = function(guess,answr){
       }
     }
   }
-  return(sum(result*c(10000,1000,100,10,1))) #Return result as a ternary value
+  return(sum(result*c(10000,1000,100,10,1))) #Return result as a decimal value
 }
 
 comp2 = function(guess,answr){ #Alternate scoring method that is about the same speed
@@ -66,17 +67,19 @@ comp2 = function(guess,answr){ #Alternate scoring method that is about the same 
   return(sum(result*c(10000,1000,100,10,1)))
 }
 
-bank = words5[1:2000] #Set number of words to use (affects time to process)
-wordScores = matrix(nrow = length(bank), ncol = length(bank), dimnames = list(bank,bank)) #Create matrix to store scores
+bank = words5num #Set number of words to use (affects time to process)
+wordScores = matrix(nrow = length(bank), ncol = length(bank), dimnames = list(words5[1:length(bank)],words5[1:length(bank)])) #Create matrix to store scores
 start.time = Sys.time()
 for(i in 1:length(bank)){
   for(j in 1:length(bank)){
-    wordScores[i,j] = comp(bank[i],bank[j]) #Score every guess word for every answer word
+    wordScores[i,j] = comp(bank[[i]],bank[[j]]) #Score every guess word for every answer word
   }
 }
 stop.time = Sys.time()
 stop.time - start.time
-#Takes around 2 hours to run!
+#Takes around 10 minutes to run
+
+write.csv(wordScores,"C:/Users/scotta/My Drive/R/wordle/wordScores.csv")
 
 #Load saved result of word scores
 wordScores <- read.csv("C:/Users/scotta/My Drive/R/wordle/wordCompare.csv", 
@@ -161,14 +164,14 @@ expInfo = function(x){
   s = sum(x)
   return(sum(-x/s*log(x/s, base = 2)))
 }
-wordBits = unlist(lapply(apply(wordScores,1,table),expInfo))
+wordBits = unlist(lapply(apply(wordScores[,possible],1,table),expInfo))
 head(sort(wordBits,decreasing = T), n = 50)
 #Best word (most bits) by this metric is "tares"
 
 #Use analysis to solve wordle
 possible = 1:length(bank)
-guess = "point"
-score = 202 #Score for guess
+guess = "lares"
+score = 1100 #Score for guess
 possible = possible[wordScores[guess,possible] == score] #Identify possible words based on score
 length(possible)
 head(bank[possible], n = 10)
@@ -247,3 +250,5 @@ plot_ly(x = names(partition),
         type = "bar") %>%
   layout(title = rownames(wordScores)[w],
          xaxis = list(categoryorder = "total descending"))
+
+
